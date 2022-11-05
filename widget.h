@@ -9,7 +9,7 @@ QT_END_NAMESPACE
 
 typedef struct Edge {
     double t0,t1;
-    double ax,bx,cx,dx,ay,by,cy,dy;
+    QPointF A,B,C,D;
     int next;
     int age;
 
@@ -32,7 +32,6 @@ private:
     QVector<Edge> edges;
     QVector<Face> faces;
     double gaussianValue();
-    void computeEdge(Edge &e, double x0, double y0, double dx0, double dy0, double x1, double y1, double dx1, double dy1);
     QPointF  computePoint(const Edge &e, double t);
     QPointF computeDerivative(const Edge &e, double t);
     int iteration;

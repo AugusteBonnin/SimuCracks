@@ -1,4 +1,4 @@
-#include "widget.h"
+﻿#include "widget.h"
 #include "ui_widget.h"
 
 #include <QPainter>
@@ -9,8 +9,10 @@ Widget::Widget(QWidget *parent)
     : QWidget(parent)
     , ui(new Ui::Widget)
 {
+    srand(time(NULL));
     iteration = 0 ;
     ui->setupUi(this);
+
     Edge e1,e2,e3,e4;
     e1.next=1;
     e2.next=2;
@@ -19,18 +21,32 @@ Widget::Widget(QWidget *parent)
     e1.age = e2.age = e3.age = e4.age = 0 ;
     e1.t0 = e2.t0 = e3.t0 = e4.t0 = 0 ;
     e1.t1 = e2.t1 = e3.t1 = e4.t1 = 1 ;
-    computeEdge(e1,0,0,0,511,0,511,0,511);
-    computeEdge(e2,0,511,511,0,511,511,511,0);
-    computeEdge(e3,511,511,0,-511,511,0,0,-511);
-    computeEdge(e4,511,0,-511,0,0,0,-511,0);
+    e1.A = QPointF(0,0);
+    e1.B = QPointF(0,128);
+    e1.C = QPointF(0,384);
+    e1.D = QPointF(0,511);
+    e2.A = QPointF(0,511);
+    e2.B = QPointF(128,511);
+    e2.C = QPointF(384,511);
+    e2.D = QPointF(511,511);
+    e3.A = QPointF(511,511);
+    e3.B = QPointF(511,384);
+    e3.C = QPointF(511,128);
+    e3.D = QPointF(511,0);
+    e4.A = QPointF(511,0);
+    e4.B = QPointF(384,0);
+    e4.C = QPointF(128,0);
+    e4.D = QPointF(0,0);
+
     edges << e1;
     edges << e2;
     edges << e3;
     edges << e4;
+
     Face f;
     f.edge=0;
     faces << f;
-    srand(time(NULL));
+
     facesToSubdivide << 0 ;
     subdivide();
 
@@ -50,27 +66,21 @@ double Widget::gaussianValue()
     return v ;
 }
 
-void Widget::computeEdge(Edge & e,double x0,double y0,double dx0,double dy0,double x1,double y1,double dx1,double dy1)
-{
-    e.dx=x0;
-    e.cx=dx0;
-    e.ax=dx1+dx0-2*x1+2*x0;
-    e.bx=-2*dx0-dx1+3*x1-3*x0;
-    e.dy=y0;
-    e.cy=dy0;
-    e.ay=dy1+dy0-2*y1+2*y0;
-    e.by=-2*dy0-dy1+3*y1-3*y0;
-}
-
 QPointF Widget::computePoint(const Edge & e,double t)
 {
-    QPointF res(e.dx+t*(e.cx+t*(e.bx+t*e.ax)),e.dy+t*(e.cy+t*(e.by+t*e.ay)));
+    QPointF res((1-t)*(1-t)*(1-t)*e.A);
+    res += 3*t*(1-t)*(1-t)*e.B;
+    res += 3*t*t*(1-t)*e.C;
+    res += t*t*t*e.D;
     return res;
 }
 
 QPointF Widget::computeDerivative(const Edge & e,double t)
 {
-    QPointF res(e.cx+t*(2*e.bx+t*3*e.ax),e.cy+t*(2*e.by+t*3*e.ay));
+    QPointF res(((-2+2*t)+(4*t-3*t*t))*e.A);
+    res += (1-(-4*t)+(3*t*t))*e.B;
+    res += (t*(2-3*t))*e.B;
+    res += 3*t*t*e.B;
     return res;
 }
 
@@ -149,6 +159,7 @@ void Widget::subdivide()
         Edge & emax1 = edges[emax1_idx];
         double d1 = emax1.t0+(emax1.t1-emax1.t0)*gaussianValue();
         QPointF p1 = computePoint(emax1,d1);
+        QPointF p1prime = computePoint(emax1,d1+(emax1.t1-emax1.t0)*.01);
         int emax1prime_idx=edges.count();
         Edge emax1prime(emax1);
         emax1.t1=d1;
@@ -178,20 +189,15 @@ void Widget::subdivide()
         Edge & emax2 = edges[emax2_idx];
         double d2;
         double dist = computeMinDist(p1,emax2,d2);
-        d2 += (.2*(rand()/(double)RAND_MAX)-.1)*(emax2.t1-emax2.t0);
+        d2 += (.3*(rand()/(double)RAND_MAX)-.15)*(emax2.t1-emax2.t0);
         if (d2<emax2.t0)
             d2 = emax2.t0;
         else if (d2>emax2.t1)
             d2 = emax2.t1;
         QPointF p2 = computePoint(emax2,d2);
+        QPointF p2prime = computePoint(emax2,d2+(emax2.t1-emax2.t0)*.01);
         QLineF l(p1,p2);
         double d = l.length();
-        //QPointF dp1 = computeDerivative(emax1,d1)/pow(1.4,(512-d)/128);
-        //QPointF dp2 = computeDerivative(emax2,d2)/pow(1.4,(512-d)/128);
-        //QPointF dp1 = computeDerivative(emax1,d1)/(4/(d/80));
-        //QPointF dp2 = computeDerivative(emax2,d2)/(4/(d/80));
-        QPointF dp1 = computeDerivative(emax1,d1)/((d>160)?1:4);
-        QPointF dp2 = computeDerivative(emax2,d2)/((d>160)?1:4);
         int emax2prime_idx=edges.count();
         Edge emax2prime(emax2) ;
         emax2.t1=d2;
@@ -204,7 +210,16 @@ void Widget::subdivide()
         e12.next=emax2prime_idx;
         e12.t0=0 ;
         e12.t1=1;
-        computeEdge(e12,p1.x(),p1.y(),dp1.y(),-dp1.x(),p2.x(),p2.y(),-dp2.y(),dp2.x());
+        QLineF l1(p1,p1prime);
+        l1 = l1.normalVector();
+        l1.setLength(d/2.0);
+        QLineF l2(p2,p2prime);
+        l2 = l2.normalVector();
+        l2.setLength(d/2.0);
+        e12.A = p1 ;
+        e12.B = l1.p2();
+        e12.C = l2.p2();
+        e12.D = p2 ;
         edges << e12;
         emax1.next=e12_idx;
         edges[emax1_idx]=emax1;
@@ -215,7 +230,10 @@ void Widget::subdivide()
         e21.next=emax1prime_idx;
         e21.t0 = 0 ;
         e21.t1 = 1 ;
-        computeEdge(e21,p2.x(),p2.y(),dp2.y(),-dp2.x(),p1.x(),p1.y(),-dp1.y(),dp1.x());
+        e21.D = p1 ;
+        e21.C = l1.p2();
+        e21.B = l2.p2();
+        e21.A = p2 ;
         edges << e21;
         emax2.next=e21_idx;
         edges[emax2_idx]=emax2;
