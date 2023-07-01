@@ -84,6 +84,16 @@ QPointF Widget::computeDerivative(const Edge & e,double t)
     return res;
 }
 
+double Widget::computeAnisotropicDist(const QPointF & O,const QVector2D & tangent,const QVector2D & normal,const QPointF & P)
+{
+    //const double factor=.025;
+    double factor = (iteration<4)?1:.025;;
+    QVector2D  OP(P-O);
+    double dpx = QVector2D::dotProduct(tangent,OP);
+    double dpy = factor*QVector2D::dotProduct(normal,OP);
+    return dpx*dpx+dpy*dpy;
+    }
+
 double Widget::computeMinDist(const QPointF & p1, const Edge & e2, double & d2)
 {
 double res = INFINITY;
@@ -99,6 +109,51 @@ for (double t = e2.t0 ; t <= e2.t1 ; t+= (e2.t1-e2.t0)*.01)
     }
 }
 return res;
+}
+
+void Widget::computeEdgesPerFaceHistogram()
+{
+    uint16_t count[5];
+    for (int i = 0 ; i < 5 ; ++i)
+        count[i]=0;
+    for (int i = 0 ; i < faces.count() ; ++i)
+    {
+        uint16_t total = 0 ;
+        Face f = faces[i];
+        int edge = f.edge;
+        do {
+            ++total ;
+            edge = edges[edge].next;
+        } while (edge != f .edge);
+        switch (total)
+        {
+        case 3 :
+            count[0]++;
+            break;
+        case 4 :
+            count[1]++;
+            break;
+        case 5:
+            count[2]++;
+            break ;
+        case 6 :
+            count[3]++;
+            break;
+        default:
+            count[4]++;
+            break;
+
+        }
+    }
+
+    QString text;
+    text += QString("Triangles : %1 (%2%%)\n").arg(count[0]).arg(count[0]*100.0f/faces.count());
+    text += QString("Quads : %1 (%2%%)\n").arg(count[1]).arg(count[1]*100.0f/faces.count());
+    text += QString("Pentas : %1 (%2%%)\n").arg(count[2]).arg(count[2]*100.0f/faces.count());
+    text += QString("Hexas : %1 (%2%%)\n").arg(count[3]).arg(count[3]*100.0f/faces.count());
+    text += QString("Heptas & + : %1 (%2%%)\n").arg(count[4]).arg(count[4]*100.0f/faces.count());
+    text += QString("Total : %1 (%2%%)\n").arg(faces.count()).arg(faces.count()*100.0f/faces.count());
+    ui->label_2->setText(text);
 }
 
 void Widget::subdivide()
@@ -124,7 +179,7 @@ void Widget::subdivide()
         } while (e_idx!=f.edge);
         if (max < 80)
             continue;
-        int emax2_idx = edges[edges[emax1_idx].next].next;
+        int emax2_idx ;//= edges[edges[emax1_idx].next].next;
         /*
         max = 0 ;
         do {
@@ -166,15 +221,21 @@ void Widget::subdivide()
         emax1prime.t0=d1;
         edges << emax1prime;
 
-        /*
+
         double min = INFINITY ;
         double d2,min_t;
+
+        QVector2D tangent(p1prime-p1);
+        tangent.normalize();
+        QVector2D normal(-tangent.y(),tangent.x());
 
         do {
             Edge & e = edges[e_idx];
             if (e_idx!=emax1_idx)
             {
-                double dist = computeMinDist(p1,e,min_t);
+                min_t = e.t0+(e.t1-e.t0)*gaussianValue();
+                QPointF p = computePoint(e,min_t);
+                double dist = computeAnisotropicDist(p1,tangent,normal,p);
                 if (dist < min)
                 {
                     min = dist;
@@ -184,16 +245,17 @@ void Widget::subdivide()
             }
             e_idx = e.next ;
         } while (e_idx!=f.edge);
-*/
+
 
         Edge & emax2 = edges[emax2_idx];
-        double d2;
+        /*double d2;
         double dist = computeMinDist(p1,emax2,d2);
         d2 += (.3*(rand()/(double)RAND_MAX)-.15)*(emax2.t1-emax2.t0);
         if (d2<emax2.t0)
             d2 = emax2.t0;
         else if (d2>emax2.t1)
             d2 = emax2.t1;
+            */
         QPointF p2 = computePoint(emax2,d2);
         QPointF p2prime = computePoint(emax2,d2+(emax2.t1-emax2.t0)*.01);
         QLineF l(p1,p2);
@@ -212,10 +274,10 @@ void Widget::subdivide()
         e12.t1=1;
         QLineF l1(p1,p1prime);
         l1 = l1.normalVector();
-        l1.setLength(d/2.0);
+        l1.setLength(d*.6);
         QLineF l2(p2,p2prime);
         l2 = l2.normalVector();
-        l2.setLength(d/2.0);
+        l2.setLength(d/4);
         e12.A = p1 ;
         e12.B = l1.p2();
         e12.C = l2.p2();
@@ -250,6 +312,8 @@ void Widget::subdivide()
     }
     facesToSubdivide = newFacesToSubdivide ;
 
+    computeEdgesPerFaceHistogram();
+
     QImage image(512,512,QImage::Format_ARGB32);
     image.fill(Qt::white);
     QPainter painter(&image);
@@ -265,7 +329,11 @@ void Widget::subdivide()
         painter.drawPolyline(poly);
     }
     ui->label->setPixmap(QPixmap::fromImage(image));
-    image.save(QString("%1.jpg").arg(iteration));
+
+    QImage widget_image(this->size(),QImage::Format_ARGB32);
+    QPainter painter2(&widget_image);
+    this->render(&painter2);
+    widget_image.save(QString("%1.jpg").arg(iteration));
 
     if (facesToSubdivide.count())
     //if (iteration<6)

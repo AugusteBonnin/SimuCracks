@@ -38,6 +38,8 @@ private:
     QVector<int> facesToSubdivide;
 
     double computeMinDist(const QPointF &p1, const Edge &e2, double &d2);
+    double computeAnisotropicDist(const QPointF &O, const QVector2D &tangent, const QVector2D &normal, const QPointF &P);
+    void computeEdgesPerFaceHistogram();
 private slots:
     void subdivide();
 
